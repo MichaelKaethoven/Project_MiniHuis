@@ -388,11 +388,12 @@ Card deck[] = {{"A", spade},   {"2", spade},   {"3", spade},   {"4", spade},
 void setupButtons();
 void setupLeds();
 void setupOLED();
+void setupSensors();
 void handleButtonPress();
 void turnButton(LedColor color);
 
 // OLED functions
-void printText(Adafruit_SSD1306 display, String text, int x, int y, int size);
+void printText(Adafruit_SSD1306 &display, String text, int x, int y, int size);
 void drawCard(const char *value, const unsigned char *suitBitmap, int x, int y);
 void drawHand(int hand[], int numCards, int startY);
 void drawBitmapImage(const unsigned char *bitmap);
@@ -449,6 +450,7 @@ void setup() {
   setupLeds();
   setupOLED();
   setupServo();
+  setupSensors();
 }
 
 void setupLeds() {
@@ -480,25 +482,30 @@ void setupButtons() {
 }
 
 void setupOLED() {
+  // Gets called in void setup
   if (!DISPLAY_BJ.begin(SSD1306_SWITCHCAPVCC, BJ_ADDRESS)) {
-    Serial.println(F("SSD1306 allocation failed"));
+    Serial.println(F("SSD1306 allocation failed FOR BJ"));
     while (true) {
       // "Infinite loop" to wait until the OLED screen is initialised
       // otherwise there might be weird behaviour with the OLED screen
     }
   }
   DISPLAY_BJ.clearDisplay();
+  Serial.println("DISPLAY BJ READY");
   if (!DISPLAY_DHT.begin(SSD1306_SWITCHCAPVCC, DHT_ADDRESS)) {
-    Serial.println(F("SSD1306 allocation failed"));
+    Serial.println(F("SSD1306 allocation failed FIR DHT"));
     while (true) {
       // "Infinite loop" to wait until the OLED screen is initialised
       // otherwise there might be weird behaviour with the OLED screen
     }
   }
-  DISPLAY_BJ.clearDisplay();
+  DISPLAY_DHT.clearDisplay();
+  Serial.println("DISPLAY DHT READY");
 }
 
 void setupServo() { doorServo.attach(SERVO_PIN); }
+
+void setupSensors() { pinMode(PIR_SENSOR, INPUT); }
 
 #pragma endregion
 
@@ -614,21 +621,23 @@ void hit() {
     return; // limit on-screen cards
 
   // Pick a random card index from deck
-  int cardIndex = random(deckSize);
-
-  // Prevent duplicates
-  for (int i = 0; i < numDrawnPlayer; i++) {
-    if (playerHand[i] == cardIndex) {
-      hit(); // draw again if already taken
-      return;
+  int cardIndex;
+  bool ok = false;
+  while (!ok) {
+    cardIndex = random(deckSize);
+    ok = true;
+    for (int i = 0; i < numDrawnPlayer; i++) {
+      if (playerHand[i] == cardIndex) {
+        ok = false;
+        break;
+      }
     }
   }
+  playerHand[numDrawnPlayer++] = cardIndex;
 
   if (numDrawnDealer == 0) {
     determineDealerHand();
   }
-
-  playerHand[numDrawnPlayer++] = cardIndex;
 
   // ---- DRAW ALL CARDS ----
   DISPLAY_BJ.clearDisplay();
@@ -646,12 +655,11 @@ void hit() {
     drawBitmapImage(bust);
   }
 
-  DISPLAY_BJ.clearDisplay();
-
   Serial.print("Hit! Drew card index: ");
   Serial.println(cardIndex);
   Serial.print("Current hand value: ");
   Serial.println(playerValue);
+  DISPLAY_BJ.display();
 }
 
 void stand() {
@@ -699,7 +707,7 @@ int determineDealerHand() {
   int index = random(52);
   Serial.print("Dealer index: ");
   Serial.println(index);
-  dealerHand[numDrawnDealer++] = {index};
+  dealerHand[numDrawnDealer++] = index;
   int val = calculateHandValue(dealerHand, numDrawnDealer);
   Serial.print("Dealer val: ");
   Serial.println(val);
@@ -740,15 +748,18 @@ void finishDealerHitting() {
     return;
   }
 
-  // Draw new dealer card
-  int cardIndex = random(deckSize);
-  for (int i = 0; i < numDrawnDealer; i++) {
-    if (dealerHand[i] == cardIndex) {
-      // Avoid duplicates
-      return;
+  int cardIndex;
+  bool ok = false;
+  while (!ok) {
+    cardIndex = random(deckSize);
+    ok = true;
+    for (int i = 0; i < numDrawnDealer; i++) {
+      if (dealerHand[i] == cardIndex) {
+        ok = false;
+        break;
+      }
     }
   }
-
   dealerHand[numDrawnDealer++] = cardIndex;
 
   // Recalculate and show dealer + player values
@@ -814,7 +825,7 @@ void drawBitmapImage(const unsigned char *bitmap, int x, int y, int width,
                      int height) {
   DISPLAY_BJ.clearDisplay();
   DISPLAY_BJ.drawBitmap(x, y, bitmap, width, height, SSD1306_WHITE);
-  DISPLAY_BJ.clearDisplay();
+  DISPLAY_BJ.display();
 }
 
 // Draw a hand of cards at a given vertical position
@@ -850,10 +861,12 @@ void drawCard(const char *value, const unsigned char *suitBitmap, int x,
   DISPLAY_BJ.setTextColor(SSD1306_WHITE);
   DISPLAY_BJ.setCursor(x + 18, y);
   DISPLAY_BJ.print(value);
+  DISPLAY_BJ.display();
 }
 
 void clearArea(int x, int y, int w, int h) {
   DISPLAY_BJ.fillRect(x, y, w, h, BLACK);
+  DISPLAY_BJ.display();
 }
 
 void updateScoreDisplay(int playerValue, int dealerValue) {
@@ -863,11 +876,11 @@ void updateScoreDisplay(int playerValue, int dealerValue) {
             5, 1);
 }
 
-void printText(Adafruit_SSD1306 display, String text, int x, int y, int size) {
+void printText(Adafruit_SSD1306 &display, String text, int x, int y, int size) {
   display.setTextSize(size);
   display.setTextColor(SSD1306_WHITE);
   display.setCursor(x, y);
   display.print(text);
-  display.clearDisplay();
+  display.display();
 }
 #pragma endregion
