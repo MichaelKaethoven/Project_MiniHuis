@@ -22,7 +22,10 @@ https://adafruit.github.io/Adafruit_SSD1306/html/class_adafruit___s_s_d1306.html
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
 #define OLED_RESET -1
+#define BJ_ADDRESS 0x3C
+#define DHT_ADDRESS 0x3D
 Adafruit_SSD1306 DISPLAY_BJ(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+Adafruit_SSD1306 DISPLAY_DHT(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 // ---- PIN DEFINITIONS ----
 #define LED_RED 10
@@ -396,7 +399,7 @@ void drawBitmapImage(const unsigned char *bitmap);
 void drawBitmapImage(const unsigned char *bitmap, int x, int y, int width,
                      int height);
 void clearArea(int x, int y, int w, int h);
-void updateScoreDISPLAY_BJ(int playerValue, int dealerValue);
+void updateScoreDisplay(int playerValue, int dealerValue);
 
 // Blackjack functions
 void updateBlackJack();
@@ -440,6 +443,7 @@ bool isDoorOpen = false;
 void setup() {
   Serial.begin(9600);
   Serial.println("System ready. RGB LED is OFF.");
+  Wire.begin();
 
   setupButtons();
   setupLeds();
@@ -476,7 +480,15 @@ void setupButtons() {
 }
 
 void setupOLED() {
-  if (!DISPLAY_BJ.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+  if (!DISPLAY_BJ.begin(SSD1306_SWITCHCAPVCC, BJ_ADDRESS)) {
+    Serial.println(F("SSD1306 allocation failed"));
+    while (true) {
+      // "Infinite loop" to wait until the OLED screen is initialised
+      // otherwise there might be weird behaviour with the OLED screen
+    }
+  }
+  DISPLAY_BJ.clearDisplay();
+  if (!DISPLAY_DHT.begin(SSD1306_SWITCHCAPVCC, DHT_ADDRESS)) {
     Serial.println(F("SSD1306 allocation failed"));
     while (true) {
       // "Infinite loop" to wait until the OLED screen is initialised
@@ -626,7 +638,7 @@ void hit() {
   int dealerValue = calculateHandValue(dealerHand, numDrawnDealer);
 
   // DISPLAY_BJ hand value at top-left (margin 5 px)
-  updateScoreDISPLAY_BJ(playerValue, dealerValue);
+  updateScoreDisplay(playerValue, dealerValue);
 
   drawHand(playerHand, numDrawnPlayer, 20);
   if (playerValue > 21) {
@@ -742,7 +754,7 @@ void finishDealerHitting() {
   // Recalculate and show dealer + player values
   int playerValue = calculateHandValue(playerHand, numDrawnPlayer);
   dealerValue = calculateHandValue(dealerHand, numDrawnDealer);
-  updateScoreDISPLAY_BJ(playerValue, dealerValue);
+  updateScoreDisplay(playerValue, dealerValue);
 
   // ---- DRAW DEALER CARDS ----
   drawHand(dealerHand, numDrawnDealer, 20);
@@ -792,7 +804,7 @@ void handleGameEnd() {
 
 #pragma endregion
 
-#pragma region DISPLAY_BJ helpers
+#pragma region Display helpers
 // ---- DISPLAY_BJ HELPERS ----
 void drawBitmapImage(const unsigned char *bitmap) {
   drawBitmapImage(bitmap, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
