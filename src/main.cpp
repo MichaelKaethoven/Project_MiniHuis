@@ -44,6 +44,10 @@ Adafruit_SSD1306 DISPLAY_DHT(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 #define BUTTON_WHITE 12 // also functions as the "STAND" button
 #define BUTTON_YELLOW 11
 
+#define BUTTON_HIT 6
+#define BUTTON_STAND 4
+#define BUTTON_RESET 2
+
 Servo doorServo;
 #define DHTTYPE DHT22
 DHT_Unified dht(DHT_SENSOR, DHTTYPE);
@@ -56,6 +60,10 @@ DHT_Unified dht(DHT_SENSOR, DHTTYPE);
 Bounce debouncerRed = Bounce();
 Bounce debouncerWhite = Bounce();
 Bounce debouncerYellow = Bounce();
+
+Bounce debouncerHit = Bounce();
+Bounce debouncerStand = Bounce();
+Bounce debouncerReset = Bounce();
 
 #pragma endregion
 
@@ -211,6 +219,9 @@ void setupButtons() {
   pinMode(BUTTON_RED, INPUT);
   pinMode(BUTTON_WHITE, INPUT);
   pinMode(BUTTON_YELLOW, INPUT);
+  pinMode(BUTTON_HIT, INPUT);
+  pinMode(BUTTON_STAND, INPUT);
+  pinMode(BUTTON_RESET, INPUT);
 
   debouncerRed.attach(BUTTON_RED);
   debouncerRed.interval(50);
@@ -220,6 +231,15 @@ void setupButtons() {
 
   debouncerYellow.attach(BUTTON_YELLOW);
   debouncerYellow.interval(50);
+
+  debouncerHit.attach(BUTTON_HIT);
+  debouncerHit.interval(50);
+
+  debouncerStand.attach(BUTTON_STAND);
+  debouncerStand.interval(50);
+
+  debouncerReset.attach(BUTTON_RESET);
+  debouncerReset.interval(50);
 }
 
 void setupOLED() {
@@ -343,35 +363,41 @@ void handleButtonPress() {
   debouncerRed.update();
   debouncerWhite.update();
   debouncerYellow.update();
+  debouncerHit.update();
+  debouncerStand.update();
+  debouncerReset.update();
 
-  // --- HIT ---
+  if (debouncerHit.fell()) {
+    hit();
+  }
+
+  if (debouncerStand.fell()) {
+    stand();
+  }
+  if (debouncerReset.fell()) {
+    resetGame();
+  }
+
   if (debouncerRed.fell()) {
     if (redOn) {
       turnButton(CLR_NONE);
     } else {
       turnButton(CLR_RED);
     }
-    hit();
   }
-
-  // --- STAND ---
   if (debouncerWhite.fell()) {
     if (whiteOn) {
       turnButton(CLR_NONE);
     } else {
       turnButton(CLR_WHITE);
     }
-    stand();
   }
-
-  // --- RESET ---
   if (debouncerYellow.fell()) {
     if (yellowOn) {
       turnButton(CLR_NONE);
     } else {
       turnButton(CLR_YELLOW);
     }
-    resetGame();
   }
 }
 
@@ -484,7 +510,8 @@ void resetGame() {
   DISPLAY_BJ.display();
 }
 
-// handToCalculate is an array of indexes to look up what the drawn cards are
+// handToCalculate is an array of indexes to look up what the drawn cards
+// are
 int calculateHandValue(int *handToCalculate, int drawnCards) {
   int total = 0;
   int aceCount = 0;
