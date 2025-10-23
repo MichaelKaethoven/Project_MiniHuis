@@ -1,7 +1,9 @@
-﻿#include <Adafruit_SSD1306.h>
-#include "bitmaps.h"
+﻿#include "bitmaps.h"
+#include <Adafruit_SSD1306.h>
+#include <Adafruit_Sensor.h>
 #include <Arduino.h>
 #include <Bounce2.h>
+#include <DHT_U.h>
 #include <Servo.h>
 #include <Wire.h>
 
@@ -15,6 +17,8 @@ https://adafruit.github.io/Adafruit_SSD1306/html/class_adafruit___s_s_d1306.html
 10/10/2025
 - BlackJack logic | https://www.chatgpt.com | 1/10/2025
 - Bitmap creation | https://javl.github.io/image2cpp | 10/10/2025
+- DHT sensor | https://github.com/adafruit/Adafruit_Sensor/blob/master/
+|23/10/2025
 */
 #pragma endregion
 
@@ -33,6 +37,7 @@ Adafruit_SSD1306 DISPLAY_DHT(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 #define LED_GREEN 8
 #define LED_BLUE 9
 #define PIR_SENSOR 3
+#define DHT_SENSOR 7
 #define SERVO_PIN 5
 
 #define BUTTON_RED 13   // also functions as the "HIT" button
@@ -40,6 +45,8 @@ Adafruit_SSD1306 DISPLAY_DHT(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 #define BUTTON_YELLOW 11
 
 Servo doorServo;
+#define DHTTYPE DHT22
+DHT_Unified dht(DHT_SENSOR, DHTTYPE);
 
 #pragma endregion
 
@@ -52,7 +59,7 @@ Bounce debouncerYellow = Bounce();
 
 #pragma endregion
 
-#pragma region Enums, bitmaps
+#pragma region Enums
 // ---- ENUMs ----
 enum LedColor { CLR_RED, CLR_WHITE, CLR_YELLOW, CLR_NONE };
 enum DoorState { OPEN, CLOSE };
@@ -62,14 +69,6 @@ DISPLAY_BJState currentState = CARD;
 
 // char array for printing the colors easier, just in case I need it
 const char *colorNames[] = {"RED", "WHITE", "YELLOW", "NONE"};
-
-// these bitmaps were created using
-// https://javl.github.io/image2cpp
-// ---- BITMAPS 128x64 -----
-// 'bust', 128x64px
-// 'win', 128x64px
-// 'lost', 128x64px
-// ---- BITMAPS 16x16 ----
 
 #pragma endregion
 
@@ -125,6 +124,7 @@ void drawBitmapImage(const unsigned char *bitmap, int x, int y, int width,
                      int height);
 void clearArea(int x, int y, int w, int h);
 void updateScoreDisplay(int playerValue, int dealerValue);
+void displayDHTToOled(float temp, float humid);
 
 // Blackjack functions
 void updateBlackJack();
@@ -137,15 +137,27 @@ void handleGameEnd();
 int calculateHandValue(int *handToCalculate, int drawnCards);
 int determineDealerHand();
 
+// sensor functions
+void updateDHTSensor();
+
 // servo functions
 void moveDoor(DoorState state);
 void setupServo();
 void updateDoor();
 
+// DHT sensor functions
+void getTempFromSensor();
+void getHumidFromSensor();
+
 #pragma endregion
 
 #pragma region Variables
-// timing
+// timing sensors
+static unsigned long lastReadMs = 0;
+const unsigned long readIntervalMs =
+    5000UL; // UL is just a cast so the calculations get forced to use UL
+
+// timing blackjack
 unsigned long lastDealerHitTime = 0;
 bool dealerHitting = false;
 int dealerHitInterval = 700;
@@ -160,6 +172,11 @@ int numDrawnDealer = 0;
 // Servo
 int doorPos = 0;
 bool isDoorOpen = false;
+
+// leds
+bool redOn = false;
+bool whiteOn = false;
+bool yellowOn = false;
 
 #pragma endregion
 
@@ -225,11 +242,16 @@ void setupOLED() {
   }
   DISPLAY_DHT.clearDisplay();
   Serial.println("DISPLAY DHT READY");
+  DISPLAY_BJ.display();
+  DISPLAY_DHT.display();
 }
 
 void setupServo() { doorServo.attach(SERVO_PIN); }
 
-void setupSensors() { pinMode(PIR_SENSOR, INPUT); }
+void setupSensors() {
+  pinMode(PIR_SENSOR, INPUT);
+  dht.begin();
+}
 
 #pragma endregion
 
@@ -239,6 +261,7 @@ void loop() {
   handleButtonPress();
   updateBlackJack();
   updateDoor();
+  updateDHTSensor();
 }
 #pragma endregion
 
@@ -272,6 +295,43 @@ void moveDoor(DoorState state) {
 
     break;
   }
+}
+
+#pragma endregion
+
+#pragma region DHT Logic
+
+void updateDHTSensor() {
+  sensors_event_t event;
+  float temp = 0;
+  float humid = 0;
+
+  unsigned long now = millis();
+  if ((unsigned long)(now - lastReadMs) < readIntervalMs)
+    return;
+
+  // Temperature
+  dht.temperature().getEvent(&event);
+  if (!isnan(event.temperature)) {
+    Serial.print(F("Temperature: "));
+    temp = event.temperature;
+    Serial.print(temp);
+
+    Serial.println(F("°C"));
+  }
+
+  // Humidity
+  dht.humidity().getEvent(&event);
+  if (!isnan(event.relative_humidity)) {
+    Serial.print(F("Humidity: "));
+    humid = event.relative_humidity;
+    Serial.print(humid);
+    Serial.println(F("%"));
+  }
+
+  // Mark read time after successful sensor update
+  lastReadMs = now;
+  displayDHTToOled(temp, humid);
 }
 
 #pragma endregion
@@ -397,6 +457,7 @@ void resetGame() {
   numDrawnPlayer = 0;
   numDrawnDealer = 0;
   DISPLAY_BJ.clearDisplay();
+  DISPLAY_BJ.display();
 }
 
 // handToCalculate is an array of indexes to look up what the drawn cards are
@@ -606,5 +667,12 @@ void printText(Adafruit_SSD1306 &display, String text, int x, int y, int size) {
   display.setCursor(x, y);
   display.print(text);
   display.display();
+}
+
+void displayDHTToOled(float temp, float humid) {
+  DISPLAY_DHT.clearDisplay();
+  String text =
+      "Temp: " + String(temp) + "C\n" + " Humid: " + String(humid) + "%";
+  printText(DISPLAY_DHT, text, 5, 20, 1);
 }
 #pragma endregion
