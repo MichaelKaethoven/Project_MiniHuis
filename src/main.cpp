@@ -346,19 +346,31 @@ void handleButtonPress() {
 
   // --- HIT ---
   if (debouncerRed.fell()) {
-    turnButton(CLR_RED);
+    if (redOn) {
+      turnButton(CLR_NONE);
+    } else {
+      turnButton(CLR_RED);
+    }
     hit();
   }
 
   // --- STAND ---
   if (debouncerWhite.fell()) {
-    turnButton(CLR_WHITE);
+    if (whiteOn) {
+      turnButton(CLR_NONE);
+    } else {
+      turnButton(CLR_WHITE);
+    }
     stand();
   }
 
   // --- RESET ---
   if (debouncerYellow.fell()) {
-    turnButton(CLR_YELLOW);
+    if (yellowOn) {
+      turnButton(CLR_NONE);
+    } else {
+      turnButton(CLR_YELLOW);
+    }
     resetGame();
   }
 }
@@ -370,24 +382,36 @@ void turnButton(LedColor color) {
     digitalWrite(LED_RED, LOW);
     digitalWrite(LED_GREEN, HIGH);
     digitalWrite(LED_BLUE, HIGH);
+    redOn = true;
+    whiteOn = false;
+    yellowOn = false;
     break;
 
   case CLR_WHITE:
     digitalWrite(LED_RED, LOW);
     digitalWrite(LED_GREEN, LOW);
     digitalWrite(LED_BLUE, LOW);
+    redOn = false;
+    whiteOn = true;
+    yellowOn = false;
     break;
 
   case CLR_YELLOW:
     digitalWrite(LED_RED, LOW);
     digitalWrite(LED_GREEN, LOW);
     digitalWrite(LED_BLUE, HIGH);
+    redOn = false;
+    whiteOn = false;
+    yellowOn = true;
     break;
 
   case CLR_NONE:
     digitalWrite(LED_RED, HIGH);
     digitalWrite(LED_GREEN, HIGH);
     digitalWrite(LED_BLUE, HIGH);
+    redOn = false;
+    whiteOn = false;
+    yellowOn = false;
     break;
   }
 
