@@ -352,6 +352,7 @@ void updateDHTSensor() {
   // Mark read time after successful sensor update
   lastReadMs = now;
   displayDHTToOled(temp, humid);
+  Serial.print("Displaying stats to Oled");
 }
 
 #pragma endregion
