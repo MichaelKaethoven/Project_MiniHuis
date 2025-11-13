@@ -9,16 +9,19 @@
 
 #pragma region Sources
 /*
+
+-
 - Bounce.2h documentation | https://github.com/thomasfredericks/Bounce2 |
 01/10/2025
 - C++ documentation | https://www.w3schools.com/cpp | 10/10/2025
-AdaFruit DISPLAY_BJ documentation |
+AdaFruit display documentation |
 https://adafruit.github.io/Adafruit_SSD1306/html/class_adafruit___s_s_d1306.html|
 10/10/2025
 - BlackJack logic | https://www.chatgpt.com | 1/10/2025
 - Bitmap creation | https://javl.github.io/image2cpp | 10/10/2025
 - DHT sensor | https://github.com/adafruit/Adafruit_Sensor/blob/master/
 |23/10/2025
+-
 */
 #pragma endregion
 
@@ -646,6 +649,7 @@ void handleGameEnd() {
     break;
   case TIE:
     Serial.println("TIE");
+    drawBitmapImage(tie);
     break;
   }
 }

@@ -4,6 +4,7 @@
 extern const unsigned char bust[] PROGMEM;
 extern const unsigned char win[] PROGMEM;
 extern const unsigned char lost[] PROGMEM;
+extern const unsigned char tie[] PROGMEM;
 extern const unsigned char club[] PROGMEM;
 extern const unsigned char heart[] PROGMEM;
 extern const unsigned char spade[] PROGMEM;
