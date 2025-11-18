@@ -7,6 +7,15 @@
 #include <Servo.h>
 #include <Wire.h>
 
+/*
+
+!!!IMPORTANT!!!
+Due to some unknown "feature", you have to connect all hardware, start the
+program and then play with the 5V wire, pulling it out
+for 5 seconds and then pressing reset on Arduino
+
+*/
+
 #pragma region Sources
 /*
 
@@ -30,8 +39,8 @@ https://adafruit.github.io/Adafruit_SSD1306/html/class_adafruit___s_s_d1306.html
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
 #define OLED_RESET -1
-#define BJ_ADDRESS 0x3C
-#define DHT_ADDRESS 0x3D
+#define BJ_ADDRESS 0x3D
+#define DHT_ADDRESS 0x3C
 Adafruit_SSD1306 DISPLAY_BJ(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 Adafruit_SSD1306 DISPLAY_DHT(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
@@ -144,6 +153,7 @@ void stand();
 void resetGame();
 void startDealerHitting();
 void finishDealerHitting();
+void updateGameEnd();
 void handleGameEnd();
 int calculateHandValue(int *handToCalculate, int drawnCards);
 int determineDealerHand();
@@ -156,22 +166,21 @@ void moveDoor(DoorState state);
 void setupServo();
 void updateDoor();
 
-// DHT sensor functions
-void getTempFromSensor();
-void getHumidFromSensor();
-
 #pragma endregion
 
 #pragma region Variables
 // timing sensors
-static unsigned long lastReadMs = 0;
-const unsigned long readIntervalMs =
+static unsigned long lastSensorReadMs = 0;
+const unsigned long sensorReadMs =
     5000UL; // UL is just a cast so the calculations get forced to use UL
 
 // timing blackjack
 unsigned long lastDealerHitTime = 0;
 bool dealerHitting = false;
 int dealerHitInterval = 700;
+unsigned long gameEndStartTime = 0;
+bool waitingForGameEnd = false;
+const unsigned long gameEndDelay = 700; // replaces delay(700)
 
 // Blackjack
 int playerHand[10];     // store indexes of drawn cards
@@ -257,7 +266,7 @@ void setupOLED() {
   DISPLAY_BJ.clearDisplay();
   Serial.println("DISPLAY BJ READY");
   if (!DISPLAY_DHT.begin(SSD1306_SWITCHCAPVCC, DHT_ADDRESS)) {
-    Serial.println(F("SSD1306 allocation failed FIR DHT"));
+    Serial.println(F("SSD1306 allocation failed FOR DHT"));
     while (true) {
       // "Infinite loop" to wait until the OLED screen is initialised
       // otherwise there might be weird behaviour with the OLED screen
@@ -330,7 +339,7 @@ void updateDHTSensor() {
   float humid = 0;
 
   unsigned long now = millis();
-  if ((unsigned long)(now - lastReadMs) < readIntervalMs)
+  if ((unsigned long)(now - lastSensorReadMs) < sensorReadMs)
     return;
 
   // Temperature
@@ -353,7 +362,7 @@ void updateDHTSensor() {
   }
 
   // Mark read time after successful sensor update
-  lastReadMs = now;
+  lastSensorReadMs = now;
   displayDHTToOled(temp, humid);
   Serial.print("Displaying stats to Oled");
 }
@@ -452,7 +461,10 @@ void turnButton(LedColor color) {
 
 #pragma region BlackJack Code
 
-void updateBlackJack() { finishDealerHitting(); }
+void updateBlackJack() {
+  finishDealerHitting();
+  updateGameEnd();
+}
 
 void hit() {
   if (numDrawnPlayer >= 10)
@@ -460,13 +472,13 @@ void hit() {
 
   // Pick a random card index from deck
   int cardIndex;
-  bool ok = false;
-  while (!ok) {
+  bool cardOk = false;
+  while (!cardOk) {
     cardIndex = random(deckSize);
-    ok = true;
+    cardOk = true;
     for (int i = 0; i < numDrawnPlayer; i++) {
       if (playerHand[i] == cardIndex) {
-        ok = false;
+        cardOk = false;
         break;
       }
     }
@@ -484,7 +496,6 @@ void hit() {
   int playerValue = calculateHandValue(playerHand, numDrawnPlayer);
   int dealerValue = calculateHandValue(dealerHand, numDrawnDealer);
 
-  // DISPLAY_BJ hand value at top-left (margin 5 px)
   updateScoreDisplay(playerValue, dealerValue);
 
   drawHand(playerHand, numDrawnPlayer, 20);
@@ -510,6 +521,8 @@ void resetGame() {
   Serial.println("Action: RESET");
   numDrawnPlayer = 0;
   numDrawnDealer = 0;
+  dealerHitting = false;
+  waitingForGameEnd = false;
   DISPLAY_BJ.clearDisplay();
   DISPLAY_BJ.display();
 }
@@ -600,64 +613,75 @@ void finishDealerHitting() {
       }
     }
   }
+
   dealerHand[numDrawnDealer++] = cardIndex;
 
-  // Recalculate and show dealer + player values
   int playerValue = calculateHandValue(playerHand, numDrawnPlayer);
   dealerValue = calculateHandValue(dealerHand, numDrawnDealer);
   updateScoreDisplay(playerValue, dealerValue);
 
-  // ---- DRAW DEALER CARDS ----
   drawHand(dealerHand, numDrawnDealer, 20);
 
   lastDealerHitTime = now;
+}
+
+void updateGameEnd() {
+  if (!waitingForGameEnd)
+    return;
+
+  unsigned long now = millis();
+
+  if (now - gameEndStartTime >= gameEndDelay) {
+    waitingForGameEnd = false;
+
+    switch (currentState) {
+    case WIN:
+      Serial.println("WIN");
+      drawBitmapImage(win);
+      break;
+    case LOSE:
+      Serial.println("LOSE");
+      drawBitmapImage(lost);
+      break;
+    case TIE:
+      Serial.println("TIE");
+      drawBitmapImage(tie);
+      break;
+    }
+  }
 }
 
 void handleGameEnd() {
   int playerVal = calculateHandValue(playerHand, numDrawnPlayer);
   int dealerVal = calculateHandValue(dealerHand, numDrawnDealer);
 
-  // 0 = player lose, 1 = push, 2 = player win, 3 = dealer bust
-
   if (playerVal > 21) {
-    currentState = LOSE; // Player busts
+    currentState = LOSE;
   } else if (dealerVal > 21) {
-    currentState = WIN; // Dealer busts
+    currentState = WIN;
   } else if (playerVal > dealerVal) {
-    currentState = WIN; // Player higher
+    currentState = WIN;
   } else if (playerVal < dealerVal) {
-    currentState = LOSE; // Dealer higher
+    currentState = LOSE;
   } else {
-    currentState = TIE; // Equal value
+    currentState = TIE;
   }
 
-  // Optional: print result for debugging
   Serial.print("Player: ");
   Serial.print(playerVal);
   Serial.print(" | Dealer: ");
   Serial.print(dealerVal);
   Serial.print(" => State: ");
-  delay(700);
-  switch (currentState) {
-  case WIN:
-    Serial.println("WIN");
-    drawBitmapImage(win);
-    break;
-  case LOSE:
-    Serial.println("LOSE");
-    drawBitmapImage(lost);
-    break;
-  case TIE:
-    Serial.println("TIE");
-    drawBitmapImage(tie);
-    break;
-  }
+  Serial.println(currentState);
+
+  gameEndStartTime = millis();
+  waitingForGameEnd = true;
 }
 
 #pragma endregion
 
 #pragma region Display helpers
-// ---- DISPLAY_BJ HELPERS ----
+// ---- DISPLAY HELPERS ----
 void drawBitmapImage(const unsigned char *bitmap) {
   drawBitmapImage(bitmap, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 }
