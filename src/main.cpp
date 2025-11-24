@@ -180,7 +180,7 @@ bool dealerHitting = false;
 int dealerHitInterval = 700;
 unsigned long gameEndStartTime = 0;
 bool waitingForGameEnd = false;
-const unsigned long gameEndDelay = 700; // replaces delay(700)
+const unsigned long gameEndDelay = 700;
 
 // Blackjack
 int playerHand[10];     // store indexes of drawn cards
@@ -204,16 +204,16 @@ bool yellowOn = false;
 // ---- SETUP ----
 void setup() {
   Serial.begin(9600);
-  Serial.println("System ready. RGB LED is OFF.");
   Wire.begin();
 
   setupButtons();
   setupLeds();
-  setupOLED();
   setupServo();
   setupSensors();
+  setupOLED();
 }
 
+// This function defines the LED pin modes and turns the led OFF on startup
 void setupLeds() {
   pinMode(LED_RED, OUTPUT);
   pinMode(LED_GREEN, OUTPUT);
@@ -227,6 +227,8 @@ void setupLeds() {
 }
 
 // ---- SETUP FUNCTIONS ----
+// This function attached the debouncers to the buttons and sets a debounce
+// interval for them.
 void setupButtons() {
   pinMode(BUTTON_RED, INPUT);
   pinMode(BUTTON_WHITE, INPUT);
@@ -254,6 +256,7 @@ void setupButtons() {
   debouncerReset.interval(50);
 }
 
+// Here we initialize the OLED screens.
 void setupOLED() {
   // Gets called in void setup
   if (!DISPLAY_BJ.begin(SSD1306_SWITCHCAPVCC, BJ_ADDRESS)) {
@@ -263,23 +266,23 @@ void setupOLED() {
       // otherwise there might be weird behaviour with the OLED screen
     }
   }
-  DISPLAY_BJ.clearDisplay();
   Serial.println("DISPLAY BJ READY");
   if (!DISPLAY_DHT.begin(SSD1306_SWITCHCAPVCC, DHT_ADDRESS)) {
     Serial.println(F("SSD1306 allocation failed FOR DHT"));
     while (true) {
-      // "Infinite loop" to wait until the OLED screen is initialised
-      // otherwise there might be weird behaviour with the OLED screen
     }
   }
+  DISPLAY_BJ.clearDisplay();
   DISPLAY_DHT.clearDisplay();
   Serial.println("DISPLAY DHT READY");
   DISPLAY_BJ.display();
   DISPLAY_DHT.display();
 }
 
+// attacht the servo pin to the servo door object
 void setupServo() { doorServo.attach(SERVO_PIN); }
 
+// start the DHT sensor
 void setupSensors() {
   pinMode(PIR_SENSOR, INPUT);
   dht.begin();
@@ -299,6 +302,8 @@ void loop() {
 
 #pragma region Door Logic
 
+// if the sensor outputs HIGH, call function move door
+// OPEN & CLOSE are states defined at the top, to be able to use SWITCH/CASE
 void updateDoor() {
   if (digitalRead(PIR_SENSOR)) {
     moveDoor(OPEN);
@@ -307,6 +312,9 @@ void updateDoor() {
   }
 }
 
+// check the state given as a parameter
+// check current state of door
+// based on those two, move door accordingly
 void moveDoor(DoorState state) {
   switch (state) {
   case OPEN:
@@ -333,6 +341,9 @@ void moveDoor(DoorState state) {
 
 #pragma region DHT Logic
 
+// standard DHT read function.
+// Calls displayDHTToOled at the end to display
+// it on the OLED screen
 void updateDHTSensor() {
   sensors_event_t event;
   float temp = 0;
@@ -370,7 +381,8 @@ void updateDHTSensor() {
 #pragma endregion
 
 #pragma region Button Logic (BJ & RGB)
-// ---- LOGIC ----
+// This function makes the buttons work and calls the correct function if the
+// button is pressed.
 void handleButtonPress() {
   // Update debouncers every loop
   debouncerRed.update();
@@ -415,6 +427,9 @@ void handleButtonPress() {
 }
 
 // ---- RGB CONTROL ----
+// I decided to use an ENUM to swap between the led colors
+// as i find this increases readability
+// as there are less nested if statements
 void turnButton(LedColor color) {
   switch (color) {
   case CLR_RED:
@@ -461,11 +476,13 @@ void turnButton(LedColor color) {
 
 #pragma region BlackJack Code
 
+// This function gets called every loop to update the game state.
 void updateBlackJack() {
   finishDealerHitting();
   updateGameEnd();
 }
 
+// Draw an extra card
 void hit() {
   if (numDrawnPlayer >= 10)
     return; // limit on-screen cards
@@ -489,25 +506,28 @@ void hit() {
     determineDealerHand();
   }
 
-  // ---- DRAW ALL CARDS ----
+  // ---- START DISPLAY UPDATE ----
   DISPLAY_BJ.clearDisplay();
 
   // Calculate hand value
   int playerValue = calculateHandValue(playerHand, numDrawnPlayer);
   int dealerValue = calculateHandValue(dealerHand, numDrawnDealer);
 
+  // update top yellow bar display with score
   updateScoreDisplay(playerValue, dealerValue);
 
+  // draw the actual hand of the player
   drawHand(playerHand, numDrawnPlayer, 20);
   if (playerValue > 21) {
     Serial.println("Hand is over 21");
     drawBitmapImage(bust);
   }
-
-  Serial.print("Hit! Drew card index: ");
-  Serial.println(cardIndex);
-  Serial.print("Current hand value: ");
-  Serial.println(playerValue);
+  /*
+    Serial.print("Hit! Drew card with index: ");
+    Serial.println(cardIndex);
+    Serial.print("Current hand value: ");
+    Serial.println(playerValue);
+    */
   DISPLAY_BJ.display();
 }
 
