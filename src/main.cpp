@@ -52,8 +52,8 @@ Adafruit_SSD1306 DISPLAY_DHT(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 #define DHT_SENSOR 7
 #define SERVO_PIN 5
 
-#define BUTTON_RED 13   // also functions as the "HIT" button
-#define BUTTON_WHITE 12 // also functions as the "STAND" button
+#define BUTTON_RED 13
+#define BUTTON_WHITE 12
 #define BUTTON_YELLOW 11
 
 #define BUTTON_HIT 6
@@ -320,7 +320,7 @@ void moveDoor(DoorState state) {
   case OPEN:
     if (isDoorOpen)
       break;
-    for (doorPos = 0; doorPos <= 95; doorPos++) {
+    for (doorPos = 0; doorPos <= 120; doorPos++) {
       doorServo.write(doorPos);
       isDoorOpen = true;
     }
@@ -328,7 +328,7 @@ void moveDoor(DoorState state) {
   case CLOSE:
     if (!isDoorOpen)
       break;
-    for (doorPos = 95; doorPos >= 0; doorPos--) {
+    for (doorPos = 120; doorPos >= 0; doorPos--) {
       doorServo.write(doorPos);
       isDoorOpen = false;
     }
@@ -356,26 +356,19 @@ void updateDHTSensor() {
   // Temperature
   dht.temperature().getEvent(&event);
   if (!isnan(event.temperature)) {
-    Serial.print(F("Temperature: "));
-    temp = event.temperature;
-    Serial.print(temp);
 
-    Serial.println(F("°C"));
+    temp = event.temperature;
   }
 
   // Humidity
   dht.humidity().getEvent(&event);
   if (!isnan(event.relative_humidity)) {
-    Serial.print(F("Humidity: "));
     humid = event.relative_humidity;
-    Serial.print(humid);
-    Serial.println(F("%"));
   }
 
   // Mark read time after successful sensor update
   lastSensorReadMs = now;
   displayDHTToOled(temp, humid);
-  Serial.print("Displaying stats to Oled");
 }
 
 #pragma endregion
@@ -468,9 +461,6 @@ void turnButton(LedColor color) {
     yellowOn = false;
     break;
   }
-
-  Serial.print("LED set to: ");
-  Serial.println(colorNames[color]);
 }
 #pragma endregion
 
