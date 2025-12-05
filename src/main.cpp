@@ -280,7 +280,10 @@ void setupOLED() {
 }
 
 // attacht the servo pin to the servo door object
-void setupServo() { doorServo.attach(SERVO_PIN); }
+void setupServo() {
+  doorServo.attach(SERVO_PIN);
+  doorServo.write(0);
+}
 
 // start the DHT sensor
 void setupSensors() {
@@ -356,7 +359,6 @@ void updateDHTSensor() {
   // Temperature
   dht.temperature().getEvent(&event);
   if (!isnan(event.temperature)) {
-
     temp = event.temperature;
   }
 
